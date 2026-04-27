@@ -1,6 +1,6 @@
 [project]
 name = "langtrans-dsl"
-version = "0.1.0"
+version = "0.1.1"
 description = "A high-level DSL that compiles to LangGraph graphs"
 readme = "README.md"
 license = "MIT"
