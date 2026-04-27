@@ -1,7 +1,7 @@
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans.builder import Trans, action
+from langtrans.builder import Trans, Proc, action
 from langtrans.spec import Spec
 
 
@@ -89,9 +89,9 @@ class TestLoopWithNesting:
         app = (
             Trans(state_schema=State)
             .loop(
-                body=Trans().sequential(
+                body=Proc().sequential(
                     increment,
-                    Trans().optional(is_even, then_=mark_even, else_=mark_odd),
+                    Proc().optional(is_even, then_=mark_even, else_=mark_odd),
                 ),
                 times=3,
             )
@@ -103,12 +103,12 @@ class TestLoopWithNesting:
 
 class TestProcedureComposition:
     def test_procedure_as_reusable_unit(self):
-        fetch_pipeline = Trans().sequential(fetch, llm)
-
         app = (
             Trans(state_schema=State)
-            .procedure("fetch_pipe", fetch_pipeline)
-            .sequential(respond)
+            .sequential(
+                Proc("fetch_pipe").sequential(fetch, llm),
+                respond,
+            )
             .compile()
         )
         result = app.invoke({"messages": [], "metadata": {}})

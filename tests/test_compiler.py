@@ -5,7 +5,7 @@ from typing import Annotated, TypedDict
 
 import pytest
 
-from langtrans.builder import Trans, action
+from langtrans.builder import Trans, Proc, action
 from langtrans.spec import Spec
 
 
@@ -273,15 +273,15 @@ class TestLoopNode:
 
 
 # =====================================================================
-# 6. ProcedureNode — name-prefixed subgraph
+# 6. Named nodes — name-prefixed subgraphs
 # =====================================================================
 
 
-class TestProcedureNode:
+class TestNamedNodes:
     def test_procedure_runs_body(self):
         app = (
             Trans(state_schema=State)
-            .procedure("sub_flow", Trans().sequential(action_a, action_b))
+            .sequential(Proc("sub_flow").sequential(action_a, action_b))
             .compile()
         )
         result = app.invoke(INIT_STATE)
@@ -290,9 +290,11 @@ class TestProcedureNode:
     def test_procedure_with_surrounding_steps(self):
         app = (
             Trans(state_schema=State)
-            .sequential(action_a)
-            .procedure("middle", Trans().sequential(action_b))
-            .sequential(action_c)
+            .sequential(
+                action_a,
+                Proc("middle").sequential(action_b),
+                action_c,
+            )
             .compile()
         )
         result = app.invoke(INIT_STATE)
@@ -301,8 +303,10 @@ class TestProcedureNode:
     def test_two_procedures_no_collision(self):
         app = (
             Trans(state_schema=State)
-            .procedure("first", Trans().sequential(action_a))
-            .procedure("second", Trans().sequential(action_b))
+            .sequential(
+                Proc("first").sequential(action_a),
+                Proc("second").sequential(action_b),
+            )
             .compile()
         )
         result = app.invoke(INIT_STATE)

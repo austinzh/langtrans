@@ -1,53 +1,45 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Optional, Union
+from dataclasses import dataclass
+from typing import Callable, Optional
 
 
 @dataclass
-class ActionNode:
-    func: Callable
-    rollback: Optional[Callable] = None
+class Node:
     name: Optional[str] = None
 
 
 @dataclass
-class SequentialNode:
-    children: list[Node]
+class ActionNode(Node):
+    func: Callable = None
+    rollback: Optional[Callable] = None
 
 
 @dataclass
-class ConcurrentNode:
-    children: list[Node]
+class SequentialNode(Node):
+    children: list[Node] = None
 
 
 @dataclass
-class OptionalNode:
-    guard: Callable
-    then_: Node
+class ConcurrentNode(Node):
+    children: list[Node] = None
+
+
+@dataclass
+class OptionalNode(Node):
+    guard: Callable = None
+    then_: Node = None
     else_: Optional[Node] = None
 
 
 @dataclass
-class LoopNode:
-    body: Node
+class LoopNode(Node):
+    body: Node = None
     times: Optional[int] = None
     until: Optional[Callable] = None
 
 
 @dataclass
-class ProcedureNode:
-    name: str
-    body: Node
-
-
-@dataclass
-class SwitchNode:
-    key: Callable
-    cases: dict[str, Node]
-
-
-Node = Union[
-    ActionNode, SequentialNode, ConcurrentNode, OptionalNode,
-    LoopNode, ProcedureNode, SwitchNode,
-]
+class SwitchNode(Node):
+    key: Callable = None
+    cases: dict[str, Node] = None

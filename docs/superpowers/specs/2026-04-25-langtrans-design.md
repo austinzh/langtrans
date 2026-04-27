@@ -141,21 +141,34 @@ Each node gets a unique ID during compilation for LangGraph node names.
 
 ## Compiler — Primitive Mappings
 
+### Single entry / single exit contract
+
+Every `compile_node()` call returns `(entry_id, exit_id)` — one entry point and one exit point. This is the key invariant that makes composition work: a parent node can always wire `prev_exit → entry` and `exit → next_entry` without knowing what's inside.
+
+Primitives with multiple branches (Optional, Switch, Concurrent) use synthetic no-op nodes to maintain this contract:
+
+- **fork / join** — ConcurrentNode fans out from one fork node and converges at one join node
+- **decision / merge** — OptionalNode and SwitchNode route from one decision node and converge at one merge node
+
+These no-op nodes (`lambda s: {}`) cost nothing at runtime — LangGraph passes through them. Without them, multi-branch primitives would need to return multiple exit IDs, complicating every parent's edge-wiring logic.
+
+### Primitive mappings
+
 **ActionNode** → Single LangGraph node.
 
 **SequentialNode** → Chain of edges: `add_edge(child_n, child_n+1)`.
 
-**ConcurrentNode** → Fan-out / fan-in. Synthetic "fork" node edges to all children. All branches edge to synthetic "join" node. LangGraph runs independent branches concurrently. State merges via reducers.
+**ConcurrentNode** → Fan-out / fan-in. Synthetic "fork" node edges to all children. All branches edge to synthetic "join" node. LangGraph runs independent branches concurrently. Concurrent branches must write to state channels with reducers (e.g., `Annotated[list, operator.add]`).
 
-**OptionalNode** → Synthetic "decision" node with `add_conditional_edges` using the guard. Routes to `then_` or `else_`. Both converge at a "merge" node.
+**OptionalNode** → Synthetic "decision" node with `add_conditional_edges` using the guard. Routes to `then_` or `else_` (or directly to merge if no else). Both branches converge at a "merge" node.
+
+**SwitchNode** → Synthetic "switch" decision node with `add_conditional_edges` using the key function. Routes to one of N case branches. All cases converge at a "switch_merge" node.
 
 **LoopNode** → Cycle in the graph. Body compiles normally. Conditional edge at the end loops back or exits. Loop counter stored in `metadata["_langtrans"]`.
 
-**RetryNode** → Similar to Loop. On exception, conditional edge routes back to retry (decrementing attempts) or propagates error. Delay handled inside wrapper node.
+**Named nodes** → Any node with `name` set compiles its children with a prefix (`"name.child_id"`), providing namespace isolation. This replaces the former ProcedureNode.
 
-**ProcedureNode** → Inline subgraph. Nodes get name-prefixed (`"sub_flow.fetch_data"`) to avoid collisions.
-
-**Rollback / Compensation** — Actions with rollbacks are wrapped: on exception, the action writes to a rollback stack in metadata, and a failure edge routes to a compensation chain (reverse order).
+**Rollback / Compensation** — Sequential nodes containing actions with rollbacks are wrapped in a single LangGraph node that runs steps in order, tracks completed rollbacks, and on failure runs them in reverse.
 
 ```
 Sequential(A, B, C) where A,B have rollbacks:

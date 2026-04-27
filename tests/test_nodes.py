@@ -1,6 +1,6 @@
 from langtrans.nodes import (
     ActionNode, ConcurrentNode, LoopNode, Node, OptionalNode,
-    ProcedureNode, SequentialNode,
+    SequentialNode,
 )
 
 def dummy(state):
@@ -66,12 +66,14 @@ class TestLoopNode:
         assert node.until is dummy_guard
         assert node.times is None
 
-class TestProcedureNode:
-    def test_named_sub_transaction(self):
-        body = SequentialNode(children=[ActionNode(func=dummy)])
-        node = ProcedureNode(name="sub_flow", body=body)
+class TestNamedNodes:
+    def test_sequential_with_name(self):
+        node = SequentialNode(children=[ActionNode(func=dummy)], name="sub_flow")
         assert node.name == "sub_flow"
-        assert isinstance(node.body, SequentialNode)
+
+    def test_sequential_without_name(self):
+        node = SequentialNode(children=[ActionNode(func=dummy)])
+        assert node.name is None
 
 class TestNodeUnionType:
     def test_action_is_node(self):

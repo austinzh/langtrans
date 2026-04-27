@@ -11,11 +11,9 @@ from langtrans.nodes import (
     LoopNode,
     Node,
     OptionalNode,
-    ProcedureNode,
     SequentialNode,
     SwitchNode,
 )
-from langtrans.spec import Spec
 
 
 class _Compiler:
@@ -36,6 +34,17 @@ class _Compiler:
         return unique
 
     def compile_node(self, node: Node) -> tuple[str, str]:
+        node_name = getattr(node, "name", None)
+        if node_name is not None and not isinstance(node, ActionNode):
+            old_prefix = self._prefix
+            self._prefix = f"{old_prefix}{node_name}."
+            try:
+                return self._compile_inner(node)
+            finally:
+                self._prefix = old_prefix
+        return self._compile_inner(node)
+
+    def _compile_inner(self, node: Node) -> tuple[str, str]:
         if isinstance(node, ActionNode):
             return self._compile_action(node)
         if isinstance(node, SequentialNode):
@@ -46,14 +55,12 @@ class _Compiler:
             return self._compile_optional(node)
         if isinstance(node, LoopNode):
             return self._compile_loop(node)
-        if isinstance(node, ProcedureNode):
-            return self._compile_procedure(node)
         if isinstance(node, SwitchNode):
             return self._compile_switch(node)
         raise TypeError(f"Unknown node type: {type(node)}")
 
     # ------------------------------------------------------------------
-    # 1. ActionNode
+    # ActionNode
     # ------------------------------------------------------------------
     def _compile_action(self, node: ActionNode) -> tuple[str, str]:
         base = node.name or node.func.__name__
@@ -62,7 +69,7 @@ class _Compiler:
         return (node_id, node_id)
 
     # ------------------------------------------------------------------
-    # 2. SequentialNode
+    # SequentialNode
     # ------------------------------------------------------------------
     def _compile_sequential(self, node: SequentialNode) -> tuple[str, str]:
         if not node.children:
@@ -70,7 +77,6 @@ class _Compiler:
             self._graph.add_node(noop_id, lambda s: {})
             return (noop_id, noop_id)
 
-        # Check if any children have rollbacks — if so, use rollback-aware compilation
         if self._has_rollbacks(node):
             return self._compile_sequential_with_rollback(node)
 
@@ -80,7 +86,7 @@ class _Compiler:
         return (pairs[0][0], pairs[-1][1])
 
     # ------------------------------------------------------------------
-    # 3. ConcurrentNode
+    # ConcurrentNode
     # ------------------------------------------------------------------
     def _compile_concurrent(self, node: ConcurrentNode) -> tuple[str, str]:
         fork_id = self._unique_id("fork")
@@ -97,7 +103,7 @@ class _Compiler:
         return (fork_id, join_id)
 
     # ------------------------------------------------------------------
-    # 4. OptionalNode
+    # OptionalNode
     # ------------------------------------------------------------------
     def _compile_optional(self, node: OptionalNode) -> tuple[str, str]:
         decision_id = self._unique_id("decision")
@@ -116,21 +122,16 @@ class _Compiler:
             self._graph.add_edge(else_exit, merge_id)
 
             def router(state, _guard=guard, _then=then_entry, _else=else_entry):
-                if callable(_guard):
-                    result = _guard(state)
-                else:
-                    result = bool(_guard)
+                result = _guard(state) if callable(_guard) else bool(_guard)
                 return _then if result else _else
 
             self._graph.add_conditional_edges(
                 decision_id, router, [then_entry, else_entry]
             )
         else:
+
             def router(state, _guard=guard, _then=then_entry, _merge=merge_id):
-                if callable(_guard):
-                    result = _guard(state)
-                else:
-                    result = bool(_guard)
+                result = _guard(state) if callable(_guard) else bool(_guard)
                 return _then if result else _merge
 
             self._graph.add_conditional_edges(
@@ -140,7 +141,7 @@ class _Compiler:
         return (decision_id, merge_id)
 
     # ------------------------------------------------------------------
-    # 5. LoopNode
+    # LoopNode
     # ------------------------------------------------------------------
     def _compile_loop(self, node: LoopNode) -> tuple[str, str]:
         if node.times is not None:
@@ -179,17 +180,13 @@ class _Compiler:
 
         body_entry, body_exit = self.compile_node(node.body)
 
-        # init -> body_entry
         self._graph.add_edge(init_id, body_entry)
-        # body_exit -> gate
         self._graph.add_edge(body_exit, gate_id)
 
-        # gate -> conditional: if counter < times -> body_entry, else -> exit
-        def gate_router(state, _key=counter_key, _times=times,
-                        _body=body_entry, _exit=exit_id):
-            meta = state.get("metadata", {})
-            lt = meta.get("_langtrans", {})
-            count = lt.get(_key, 0)
+        def gate_router(
+            state, _key=counter_key, _times=times, _body=body_entry, _exit=exit_id
+        ):
+            count = state.get("metadata", {}).get("_langtrans", {}).get(_key, 0)
             return _body if count < _times else _exit
 
         self._graph.add_conditional_edges(gate_id, gate_router, [body_entry, exit_id])
@@ -206,10 +203,8 @@ class _Compiler:
 
         body_entry, body_exit = self.compile_node(node.body)
 
-        # entry -> body_entry
         self._graph.add_edge(entry_id, body_entry)
 
-        # body_exit -> conditional: if until(state) -> exit, else -> body_entry
         def body_router(state, _until=until_fn, _body=body_entry, _exit=exit_id):
             return _exit if _until(state) else _body
 
@@ -218,19 +213,7 @@ class _Compiler:
         return (entry_id, exit_id)
 
     # ------------------------------------------------------------------
-    # 6. ProcedureNode
-    # ------------------------------------------------------------------
-    def _compile_procedure(self, node: ProcedureNode) -> tuple[str, str]:
-        old_prefix = self._prefix
-        self._prefix = f"{old_prefix}{node.name}."
-        try:
-            entry, exit_ = self.compile_node(node.body)
-        finally:
-            self._prefix = old_prefix
-        return (entry, exit_)
-
-    # ------------------------------------------------------------------
-    # 8. SwitchNode
+    # SwitchNode
     # ------------------------------------------------------------------
     def _compile_switch(self, node: SwitchNode) -> tuple[str, str]:
         dispatch_id = self._unique_id("switch")
@@ -248,8 +231,7 @@ class _Compiler:
         key_fn = node.key
 
         def router(state, _key_fn=key_fn, _cases=case_entries):
-            result = _key_fn(state)
-            return _cases[result]
+            return _cases[_key_fn(state)]
 
         self._graph.add_conditional_edges(
             dispatch_id, router, list(case_entries.values())
@@ -258,7 +240,7 @@ class _Compiler:
         return (dispatch_id, merge_id)
 
     # ------------------------------------------------------------------
-    # 9. Sequential with rollback
+    # Sequential with rollback
     # ------------------------------------------------------------------
     def _has_rollbacks(self, node: SequentialNode) -> bool:
         return any(
@@ -266,7 +248,9 @@ class _Compiler:
             for child in node.children
         )
 
-    def _compile_sequential_with_rollback(self, node: SequentialNode) -> tuple[str, str]:
+    def _compile_sequential_with_rollback(
+        self, node: SequentialNode
+    ) -> tuple[str, str]:
         rollback_id = self._unique_id("seq_rollback")
 
         steps: list[tuple[Callable, Callable | None]] = []
@@ -281,17 +265,23 @@ class _Compiler:
 
         has_async = any(
             inspect.iscoroutinefunction(fn) or inspect.iscoroutinefunction(rb)
-            for fn, rb in steps if fn is not None
+            for fn, rb in steps
+            if fn is not None
         )
 
         if has_async:
+
             async def rollback_runner(state, _steps=steps):
                 current_state = dict(state)
                 completed_rollbacks: list[Callable] = []
 
                 for func, rollback in _steps:
                     try:
-                        updates = await func(current_state) if inspect.iscoroutinefunction(func) else func(current_state)
+                        updates = (
+                            await func(current_state)
+                            if inspect.iscoroutinefunction(func)
+                            else func(current_state)
+                        )
                         if updates:
                             for k, v in updates.items():
                                 current_state[k] = v
@@ -300,7 +290,11 @@ class _Compiler:
                     except Exception:
                         for rb in reversed(completed_rollbacks):
                             try:
-                                rb_updates = await rb(current_state) if inspect.iscoroutinefunction(rb) else rb(current_state)
+                                rb_updates = (
+                                    await rb(current_state)
+                                    if inspect.iscoroutinefunction(rb)
+                                    else rb(current_state)
+                                )
                                 if rb_updates:
                                     for k, v in rb_updates.items():
                                         current_state[k] = v
@@ -313,7 +307,9 @@ class _Compiler:
                     if k not in state or state[k] != v:
                         result[k] = v
                 return result
+
         else:
+
             def rollback_runner(state, _steps=steps):
                 current_state = dict(state)
                 completed_rollbacks: list[Callable] = []
