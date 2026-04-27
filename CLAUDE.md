@@ -24,7 +24,7 @@ uv run python examples/smart_assistant.py
 
 Three layers:
 
-1. **DSL Layer** (`builder.py`) — `@action` decorator, `Trans` top-level builder, `Proc` sub-builder. User-facing API.
+1. **DSL Layer** (`builder.py`) — `@action` decorator, `Trans` top-level builder, `Proc` named sub-builder, and top-level convenience functions (`sequential`, `concurrent`, `optional`, `loop`, `switch`). User-facing API.
 2. **Node Model** (`nodes.py`) — Dataclass tree: `ActionNode`, `SequentialNode`, `ConcurrentNode`, `OptionalNode`, `LoopNode`, `SwitchNode`. Pure data, no logic.
 3. **Compiler** (`compiler.py`) — Walks the node tree, emits `StateGraph` nodes/edges, returns `CompiledStateGraph`.
 
@@ -58,8 +58,9 @@ examples/           # runnable demos
 - Compiler methods return `(entry_node_id, exit_node_id)` tuples
 - Internal bookkeeping goes in `metadata["_langtrans"]` to avoid user key collisions
 - Node IDs are auto-generated with `_unique_id()` to avoid LangGraph name collisions
-- `Trans` is the top-level builder (has `state_schema` and `compile()`); `Proc` is the sub-builder for nesting and reuse
-- The builder accepts plain callables, `Proc` sub-builders, `Node` dataclasses, and LangGraph `Runnable` objects
+- `Trans` is the top-level builder (has `state_schema` and `compile()`); `Proc("name")` is for named groups
+- Top-level functions (`sequential`, `concurrent`, `optional`, `loop`, `switch`) are the preferred way to build sub-workflows — they delegate to `Proc()` internally
+- The builder accepts plain callables, `Proc`/top-level function results, `Node` dataclasses, and LangGraph `Runnable` objects
 
 ## Testing
 

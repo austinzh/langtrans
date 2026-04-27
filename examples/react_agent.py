@@ -3,7 +3,7 @@
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans.builder import Proc, Trans
+from langtrans.builder import Trans, optional, sequential
 
 
 class State(TypedDict):
@@ -39,9 +39,9 @@ app = (
     Trans(state_schema=State)
     .loop(
         until=lambda s: s.get("metadata", {}).get("done", False),
-        body=Proc().sequential(
+        body=sequential(
             call_agent,
-            Proc().optional(
+            optional(
                 should_use_tool,
                 then_=execute_tool,
             ),

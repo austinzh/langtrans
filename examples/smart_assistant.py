@@ -13,7 +13,7 @@ Usage:
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans import Proc, Trans
+from langtrans import Trans, switch
 
 
 class State(TypedDict):
@@ -147,7 +147,7 @@ app = (
     Trans(state_schema=State)
     .loop(
         until=is_done,
-        body=Proc().switch(
+        body=switch(
             key=classify,
             cases={
                 "understand": understand_query,

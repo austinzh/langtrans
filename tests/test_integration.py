@@ -1,7 +1,7 @@
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans.builder import Proc, Trans
+from langtrans.builder import Proc, Trans, optional, sequential
 from langtrans.spec import Spec
 
 
@@ -84,9 +84,9 @@ class TestLoopWithNesting:
         app = (
             Trans(state_schema=State)
             .loop(
-                body=Proc().sequential(
+                body=sequential(
                     self.increment,
-                    Proc().optional(self.is_even, then_=mark_even, else_=mark_odd),
+                    optional(self.is_even, then_=mark_even, else_=mark_odd),
                 ),
                 times=3,
             )

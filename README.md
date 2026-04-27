@@ -25,12 +25,14 @@ app = graph.compile()
 
 ```python
 # langtrans — the structure IS the workflow
+from langtrans import Trans, sequential, loop
+
 app = (
     Trans(state_schema=AgentState)
     .sequential(call_llm)
     .loop(
         until=lambda s: not has_tool_calls(s),
-        body=Proc().sequential(tool_node, call_llm),
+        body=sequential(tool_node, call_llm),
     )
     .compile()
 )
@@ -150,9 +152,11 @@ Trans(state_schema=State).loop(
 Multi-way branching — the key to arbitrary state machines:
 
 ```python
+from langtrans import Trans, switch
+
 Trans(state_schema=State).loop(
     until=lambda s: s["metadata"].get("done"),
-    body=Proc().switch(
+    body=switch(
         key=classify_situation,
         cases={
             "need_tools":    execute_tools,
@@ -164,9 +168,34 @@ Trans(state_schema=State).loop(
 ).compile()
 ```
 
-### Proc (Sub-builders)
+### Nesting
 
-`Proc()` creates reusable sub-builders for nesting. Use `Proc("name")` to give a group a label:
+All primitives compose via top-level functions (`sequential`, `concurrent`, `optional`, `loop`, `switch`) for building sub-workflows:
+
+```python
+from langtrans import Trans, concurrent, optional, sequential
+
+app = (
+    Trans(state_schema=State)
+    .sequential(
+        fetch_data,
+        concurrent(
+            sequential(call_llm, parse_result),
+            search_web,
+        ),
+        optional(
+            is_confident,
+            then_=respond,
+            else_=escalate,
+        ),
+    )
+    .compile()
+)
+```
+
+### Named Groups (Proc)
+
+Use `Proc("name")` when you want to label a group for debugging or reuse:
 
 ```python
 from langtrans import Trans, Proc
@@ -176,29 +205,6 @@ ingest = Proc("ingest").sequential(fetch, validate, transform)
 Trans(state_schema=State)
     .sequential(ingest, respond)
     .compile()
-```
-
-### Nesting
-
-All primitives compose via nested `Proc()` builders:
-
-```python
-app = (
-    Trans(state_schema=State)
-    .sequential(
-        fetch_data,
-        Proc().concurrent(
-            Proc().sequential(call_llm, parse_result),
-            search_web,
-        ),
-        Proc().optional(
-            is_confident,
-            then_=respond,
-            else_=escalate,
-        ),
-    )
-    .compile()
-)
 ```
 
 ## Rollback / Saga Pattern

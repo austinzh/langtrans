@@ -22,7 +22,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from langtrans import Proc, Trans
+from langtrans import Trans, sequential
 
 # ── Shared setup ─────────────────────────────────────────────────────
 
@@ -94,7 +94,7 @@ def build_langtrans():
         .sequential(call_llm)
         .loop(
             until=lambda s: not has_tool_calls(s),
-            body=Proc().sequential(tool_node, call_llm),
+            body=sequential(tool_node, call_llm),
         )
         .compile()
     )

@@ -1,7 +1,7 @@
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans import Proc, SwitchNode, Trans
+from langtrans import SwitchNode, Trans, sequential, switch
 from langtrans.nodes import ActionNode
 
 
@@ -42,30 +42,22 @@ class TestSwitchNodeModel:
 
 class TestSwitchBuilder:
     def test_switch_builds_correct_node(self):
-        tree = (
-            Proc()
-            .switch(
-                key=lambda s: "a",
-                cases={"a": action_a, "b": action_b},
-            )
-            .build()
-        )
+        tree = switch(
+            key=lambda s: "a",
+            cases={"a": action_a, "b": action_b},
+        ).build()
         assert isinstance(tree, SwitchNode)
         assert len(tree.cases) == 2
         assert isinstance(tree.cases["a"], ActionNode)
 
     def test_switch_with_nested_trans(self):
-        tree = (
-            Proc()
-            .switch(
-                key=lambda s: "x",
-                cases={
-                    "x": Proc().sequential(action_a, action_b),
-                    "y": action_c,
-                },
-            )
-            .build()
-        )
+        tree = switch(
+            key=lambda s: "x",
+            cases={
+                "x": sequential(action_a, action_b),
+                "y": action_c,
+            },
+        ).build()
         assert isinstance(tree, SwitchNode)
 
 
@@ -107,7 +99,7 @@ class TestSwitchCompiler:
             .switch(
                 key=lambda s: "x",
                 cases={
-                    "x": Proc().sequential(action_a, action_b),
+                    "x": sequential(action_a, action_b),
                     "y": action_c,
                 },
             )
@@ -153,7 +145,7 @@ class TestSwitchStateMachine:
             Trans(state_schema=State)
             .loop(
                 until=lambda s: s.get("metadata", {}).get("_state") == "done",
-                body=Proc().switch(
+                body=switch(
                     key=lambda s: s.get("metadata", {}).get("_state", "a"),
                     cases={
                         "a": self.state_a,
@@ -204,7 +196,7 @@ class TestSwitchStateMachine:
             Trans(state_schema=State)
             .loop(
                 until=lambda s: s.get("metadata", {}).get("_state") == "done",
-                body=Proc().switch(
+                body=switch(
                     key=lambda s: s.get("metadata", {}).get("_state", "a"),
                     cases={"a": self.go_a, "b": self.go_b, "c": self.go_c},
                 ),

@@ -7,6 +7,11 @@ from langtrans.builder import (
     StepArg,
     Trans,
     action,
+    concurrent,
+    loop,
+    optional,
+    sequential,
+    switch,
 )
 from langtrans.nodes import (
     ActionNode,
@@ -34,4 +39,9 @@ __all__ = [
     "SwitchNode",
     "Trans",
     "action",
+    "concurrent",
+    "loop",
+    "optional",
+    "sequential",
+    "switch",
 ]

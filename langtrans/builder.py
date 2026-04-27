@@ -14,7 +14,19 @@ from langtrans.nodes import (
 )
 from langtrans.spec import Spec
 
-__all__ = ["GuardArg", "Proc", "RunnableLike", "StepArg", "Trans", "action"]
+__all__ = [
+    "GuardArg",
+    "Proc",
+    "RunnableLike",
+    "StepArg",
+    "Trans",
+    "action",
+    "concurrent",
+    "loop",
+    "optional",
+    "sequential",
+    "switch",
+]
 
 
 @runtime_checkable
@@ -148,3 +160,43 @@ class Proc(_BuilderBase):
         if self._name is not None:
             inner.name = self._name
         return inner
+
+
+# -- Top-level convenience functions ------------------------------------------
+
+
+def sequential(*args: StepArg, name: str | None = None) -> Proc:
+    return Proc().sequential(*args, name=name)
+
+
+def concurrent(*args: StepArg, name: str | None = None) -> Proc:
+    return Proc().concurrent(*args, name=name)
+
+
+def optional(
+    guard: GuardArg,
+    *,
+    then_: StepArg,
+    else_: StepArg | None = None,
+    name: str | None = None,
+) -> Proc:
+    return Proc().optional(guard, then_=then_, else_=else_, name=name)
+
+
+def loop(
+    *,
+    body: StepArg,
+    times: int | None = None,
+    until: Callable[..., Any] | None = None,
+    name: str | None = None,
+) -> Proc:
+    return Proc().loop(body=body, times=times, until=until, name=name)
+
+
+def switch(
+    *,
+    key: Callable[..., Any],
+    cases: dict[str, StepArg],
+    name: str | None = None,
+) -> Proc:
+    return Proc().switch(key=key, cases=cases, name=name)
