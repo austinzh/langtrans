@@ -31,8 +31,11 @@ def format_response(state):
 
 app = (
     Trans(state_schema=State)
-    .sequential(fetch_data, call_llm, format_response)
-    .compile()
+    .sequential(
+        fetch_data, 
+        call_llm, 
+        format_response
+    ).compile()
 )
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ class State(TypedDict):
     metadata: dict
 
 
-def search_web(state):
+def search_web(state: State):
     meta = dict(state.get("metadata", {}))
     results = list(meta.get("results", []))
     results.append("web result")

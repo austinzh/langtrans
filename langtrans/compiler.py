@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 import time
 from typing import Any, Callable
 
@@ -86,26 +88,37 @@ class _Compiler:
     # 3. ConcurrentNode
     # ------------------------------------------------------------------
     def _compile_concurrent(self, node: ConcurrentNode) -> tuple[str, str]:
-        # Collect all leaf action functions from the concurrent children.
-        # We run them sequentially in a single LangGraph node to avoid
-        # conflicts on non-annotated state channels (like 'metadata: dict').
         funcs = self._collect_action_funcs(node.children)
+        has_async = any(inspect.iscoroutinefunction(fn) for fn in funcs)
 
         concurrent_id = self._unique_id("concurrent")
 
-        def concurrent_runner(state, _funcs=funcs):
-            current_state = dict(state)
-            for fn in _funcs:
-                updates = fn(current_state)
-                if updates:
-                    for k, v in updates.items():
-                        current_state[k] = v
-            # Return the diff from original state
-            result = {}
-            for k, v in current_state.items():
-                if k not in state or state[k] != v:
-                    result[k] = v
-            return result
+        if has_async:
+            async def concurrent_runner(state, _funcs=funcs):
+                current_state = dict(state)
+                for fn in _funcs:
+                    updates = await fn(current_state) if inspect.iscoroutinefunction(fn) else fn(current_state)
+                    if updates:
+                        for k, v in updates.items():
+                            current_state[k] = v
+                result = {}
+                for k, v in current_state.items():
+                    if k not in state or state[k] != v:
+                        result[k] = v
+                return result
+        else:
+            def concurrent_runner(state, _funcs=funcs):
+                current_state = dict(state)
+                for fn in _funcs:
+                    updates = fn(current_state)
+                    if updates:
+                        for k, v in updates.items():
+                            current_state[k] = v
+                result = {}
+                for k, v in current_state.items():
+                    if k not in state or state[k] != v:
+                        result[k] = v
+                return result
 
         self._graph.add_node(concurrent_id, concurrent_runner)
         return (concurrent_id, concurrent_id)
@@ -263,16 +276,28 @@ class _Compiler:
 
         retry_id = self._unique_id(f"retry_{base_name}")
 
-        def retry_runner(state, _func=body_func, _max=max_attempts, _delay=delay):
-            last_exc = None
-            for attempt in range(_max):
-                try:
-                    return _func(state)
-                except Exception as exc:
-                    last_exc = exc
-                    if attempt < _max - 1 and _delay > 0:
-                        time.sleep(_delay)
-            raise last_exc  # type: ignore[misc]
+        if inspect.iscoroutinefunction(body_func):
+            async def retry_runner(state, _func=body_func, _max=max_attempts, _delay=delay):
+                last_exc = None
+                for attempt in range(_max):
+                    try:
+                        return await _func(state)
+                    except Exception as exc:
+                        last_exc = exc
+                        if attempt < _max - 1 and _delay > 0:
+                            await asyncio.sleep(_delay)
+                raise last_exc
+        else:
+            def retry_runner(state, _func=body_func, _max=max_attempts, _delay=delay):
+                last_exc = None
+                for attempt in range(_max):
+                    try:
+                        return _func(state)
+                    except Exception as exc:
+                        last_exc = exc
+                        if attempt < _max - 1 and _delay > 0:
+                            time.sleep(_delay)
+                raise last_exc
 
         self._graph.add_node(retry_id, retry_runner)
         return (retry_id, retry_id)
@@ -329,7 +354,6 @@ class _Compiler:
     def _compile_sequential_with_rollback(self, node: SequentialNode) -> tuple[str, str]:
         rollback_id = self._unique_id("seq_rollback")
 
-        # Gather ordered steps: (func, rollback_or_None)
         steps: list[tuple[Callable, Callable | None]] = []
         for child in node.children:
             if isinstance(child, ActionNode):
@@ -340,36 +364,69 @@ class _Compiler:
                     f"got {type(child)}"
                 )
 
-        def rollback_runner(state, _steps=steps):
-            current_state = dict(state)
-            completed_rollbacks: list[Callable] = []
+        has_async = any(
+            inspect.iscoroutinefunction(fn) or inspect.iscoroutinefunction(rb)
+            for fn, rb in steps if fn is not None
+        )
 
-            for func, rollback in _steps:
-                try:
-                    updates = func(current_state)
-                    if updates:
-                        for k, v in updates.items():
-                            current_state[k] = v
-                    if rollback is not None:
-                        completed_rollbacks.append(rollback)
-                except Exception:
-                    # Run rollbacks in reverse
-                    for rb in reversed(completed_rollbacks):
-                        try:
-                            rb_updates = rb(current_state)
-                            if rb_updates:
-                                for k, v in rb_updates.items():
-                                    current_state[k] = v
-                        except Exception:
-                            pass  # swallow rollback errors
-                    raise
+        if has_async:
+            async def rollback_runner(state, _steps=steps):
+                current_state = dict(state)
+                completed_rollbacks: list[Callable] = []
 
-            # Compute diff
-            result = {}
-            for k, v in current_state.items():
-                if k not in state or state[k] != v:
-                    result[k] = v
-            return result
+                for func, rollback in _steps:
+                    try:
+                        updates = await func(current_state) if inspect.iscoroutinefunction(func) else func(current_state)
+                        if updates:
+                            for k, v in updates.items():
+                                current_state[k] = v
+                        if rollback is not None:
+                            completed_rollbacks.append(rollback)
+                    except Exception:
+                        for rb in reversed(completed_rollbacks):
+                            try:
+                                rb_updates = await rb(current_state) if inspect.iscoroutinefunction(rb) else rb(current_state)
+                                if rb_updates:
+                                    for k, v in rb_updates.items():
+                                        current_state[k] = v
+                            except Exception:
+                                pass
+                        raise
+
+                result = {}
+                for k, v in current_state.items():
+                    if k not in state or state[k] != v:
+                        result[k] = v
+                return result
+        else:
+            def rollback_runner(state, _steps=steps):
+                current_state = dict(state)
+                completed_rollbacks: list[Callable] = []
+
+                for func, rollback in _steps:
+                    try:
+                        updates = func(current_state)
+                        if updates:
+                            for k, v in updates.items():
+                                current_state[k] = v
+                        if rollback is not None:
+                            completed_rollbacks.append(rollback)
+                    except Exception:
+                        for rb in reversed(completed_rollbacks):
+                            try:
+                                rb_updates = rb(current_state)
+                                if rb_updates:
+                                    for k, v in rb_updates.items():
+                                        current_state[k] = v
+                            except Exception:
+                                pass
+                        raise
+
+                result = {}
+                for k, v in current_state.items():
+                    if k not in state or state[k] != v:
+                        result[k] = v
+                return result
 
         self._graph.add_node(rollback_id, rollback_runner)
         return (rollback_id, rollback_id)
