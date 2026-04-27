@@ -4,7 +4,7 @@ from typing import Callable, Optional, Union
 
 from langtrans.nodes import (
     ActionNode, ConcurrentNode, LoopNode, Node, OptionalNode,
-    ProcedureNode, RetryNode, SequentialNode,
+    ProcedureNode, RetryNode, SequentialNode, SwitchNode,
 )
 from langtrans.spec import Spec
 
@@ -68,6 +68,11 @@ class Trans:
 
     def procedure(self, name: str, body: Union[Trans, Node]) -> Trans:
         self._steps.append(ProcedureNode(name=name, body=_to_node(body)))
+        return self
+
+    def switch(self, *, key: Callable, cases: dict[str, Union[Callable, Trans, Node]]) -> Trans:
+        compiled_cases = {k: _to_node(v) for k, v in cases.items()}
+        self._steps.append(SwitchNode(key=key, cases=compiled_cases))
         return self
 
     def build(self) -> Node:

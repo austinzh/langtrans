@@ -48,7 +48,13 @@ class ProcedureNode:
     body: Node
 
 
+@dataclass
+class SwitchNode:
+    key: Callable
+    cases: dict[str, Node]
+
+
 Node = Union[
     ActionNode, SequentialNode, ConcurrentNode, OptionalNode,
-    LoopNode, RetryNode, ProcedureNode,
+    LoopNode, RetryNode, ProcedureNode, SwitchNode,
 ]

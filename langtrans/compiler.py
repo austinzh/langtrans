@@ -14,6 +14,7 @@ from langtrans.nodes import (
     ProcedureNode,
     RetryNode,
     SequentialNode,
+    SwitchNode,
 )
 from langtrans.spec import Spec
 
@@ -50,6 +51,8 @@ class _Compiler:
             return self._compile_retry(node)
         if isinstance(node, ProcedureNode):
             return self._compile_procedure(node)
+        if isinstance(node, SwitchNode):
+            return self._compile_switch(node)
         raise TypeError(f"Unknown node type: {type(node)}")
 
     # ------------------------------------------------------------------
@@ -287,7 +290,35 @@ class _Compiler:
         return (entry, exit_)
 
     # ------------------------------------------------------------------
-    # 8. Sequential with rollback
+    # 8. SwitchNode
+    # ------------------------------------------------------------------
+    def _compile_switch(self, node: SwitchNode) -> tuple[str, str]:
+        dispatch_id = self._unique_id("switch")
+        merge_id = self._unique_id("switch_merge")
+
+        self._graph.add_node(dispatch_id, lambda s: {})
+        self._graph.add_node(merge_id, lambda s: {})
+
+        case_entries = {}
+        for case_key, case_node in node.cases.items():
+            entry, exit_ = self.compile_node(case_node)
+            self._graph.add_edge(exit_, merge_id)
+            case_entries[case_key] = entry
+
+        key_fn = node.key
+
+        def router(state, _key_fn=key_fn, _cases=case_entries):
+            result = _key_fn(state)
+            return _cases[result]
+
+        self._graph.add_conditional_edges(
+            dispatch_id, router, list(case_entries.values())
+        )
+
+        return (dispatch_id, merge_id)
+
+    # ------------------------------------------------------------------
+    # 9. Sequential with rollback
     # ------------------------------------------------------------------
     def _has_rollbacks(self, node: SequentialNode) -> bool:
         return any(
