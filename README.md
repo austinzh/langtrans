@@ -43,7 +43,7 @@ Both produce the same `CompiledStateGraph` with the same runtime superpowers. Th
 ## Install
 
 ```bash
-pip install langtrans
+pip install langtrans-dsl
 ```
 
 Or for development:
