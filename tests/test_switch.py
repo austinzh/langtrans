@@ -118,43 +118,37 @@ class TestSwitchCompiler:
 
 
 class TestSwitchStateMachine:
+    @staticmethod
+    def state_a(state):
+        meta = dict(state.get("metadata", {}))
+        calls = list(meta.get("_calls", []))
+        calls.append("a")
+        meta["_calls"] = calls
+        a_count = meta.get("_a_count", 0) + 1
+        meta["_a_count"] = a_count
+        meta["_state"] = "b" if a_count == 1 else "c"
+        return {"metadata": meta}
+
+    @staticmethod
+    def state_b(state):
+        meta = dict(state.get("metadata", {}))
+        calls = list(meta.get("_calls", []))
+        calls.append("b")
+        meta["_calls"] = calls
+        meta["_state"] = "a"
+        return {"metadata": meta}
+
+    @staticmethod
+    def state_c(state):
+        meta = dict(state.get("metadata", {}))
+        calls = list(meta.get("_calls", []))
+        calls.append("c")
+        meta["_calls"] = calls
+        meta["_state"] = "done"
+        return {"metadata": meta}
+
     def test_full_state_machine_with_loop(self):
         """A → B → A → C → done: classic state machine via loop + switch."""
-
-        call_count = {"n": 0}
-
-        def state_a(state):
-            call_count["n"] += 1
-            meta = dict(state.get("metadata", {}))
-            calls = list(meta.get("_calls", []))
-            calls.append("a")
-            meta["_calls"] = calls
-            # First time go to B, second time go to C
-            meta["_state"] = "b" if call_count["n"] == 1 else "c"
-            return {"metadata": meta}
-
-        state_a.__name__ = "state_a"
-
-        def state_b(state):
-            meta = dict(state.get("metadata", {}))
-            calls = list(meta.get("_calls", []))
-            calls.append("b")
-            meta["_calls"] = calls
-            meta["_state"] = "a"
-            return {"metadata": meta}
-
-        state_b.__name__ = "state_b"
-
-        def state_c(state):
-            meta = dict(state.get("metadata", {}))
-            calls = list(meta.get("_calls", []))
-            calls.append("c")
-            meta["_calls"] = calls
-            meta["_state"] = "done"
-            return {"metadata": meta}
-
-        state_c.__name__ = "state_c"
-
         app = (
             Trans(state_schema=State)
             .loop(
@@ -162,9 +156,9 @@ class TestSwitchStateMachine:
                 body=Proc().switch(
                     key=lambda s: s.get("metadata", {}).get("_state", "a"),
                     cases={
-                        "a": state_a,
-                        "b": state_b,
-                        "c": state_c,
+                        "a": self.state_a,
+                        "b": self.state_b,
+                        "c": self.state_c,
                     },
                 ),
             )
@@ -175,49 +169,44 @@ class TestSwitchStateMachine:
         assert result["metadata"]["_calls"] == ["a", "b", "a", "c"]
         assert result["metadata"]["_state"] == "done"
 
+    @staticmethod
+    def go_a(state):
+        meta = dict(state.get("metadata", {}))
+        calls = list(meta.get("_calls", []))
+        calls.append("a")
+        meta["_calls"] = calls
+        meta["_state"] = "b"
+        return {"metadata": meta}
+
+    @staticmethod
+    def go_b(state):
+        meta = dict(state.get("metadata", {}))
+        calls = list(meta.get("_calls", []))
+        calls.append("b")
+        meta["_calls"] = calls
+        meta["_state"] = "c"
+        return {"metadata": meta}
+
+    @staticmethod
+    def go_c(state):
+        meta = dict(state.get("metadata", {}))
+        calls = list(meta.get("_calls", []))
+        calls.append("c")
+        meta["_calls"] = calls
+        cycle_count = meta.get("_cycle_count", 0) + 1
+        meta["_cycle_count"] = cycle_count
+        meta["_state"] = "done" if cycle_count >= 2 else "a"
+        return {"metadata": meta}
+
     def test_three_state_cycle(self):
         """A → B → C → A → B → C → done (cycle 2 times)."""
-
-        cycle_count = {"n": 0}
-
-        def go_a(state):
-            meta = dict(state.get("metadata", {}))
-            calls = list(meta.get("_calls", []))
-            calls.append("a")
-            meta["_calls"] = calls
-            meta["_state"] = "b"
-            return {"metadata": meta}
-
-        go_a.__name__ = "go_a"
-
-        def go_b(state):
-            meta = dict(state.get("metadata", {}))
-            calls = list(meta.get("_calls", []))
-            calls.append("b")
-            meta["_calls"] = calls
-            meta["_state"] = "c"
-            return {"metadata": meta}
-
-        go_b.__name__ = "go_b"
-
-        def go_c(state):
-            cycle_count["n"] += 1
-            meta = dict(state.get("metadata", {}))
-            calls = list(meta.get("_calls", []))
-            calls.append("c")
-            meta["_calls"] = calls
-            meta["_state"] = "done" if cycle_count["n"] >= 2 else "a"
-            return {"metadata": meta}
-
-        go_c.__name__ = "go_c"
-
         app = (
             Trans(state_schema=State)
             .loop(
                 until=lambda s: s.get("metadata", {}).get("_state") == "done",
                 body=Proc().switch(
                     key=lambda s: s.get("metadata", {}).get("_state", "a"),
-                    cases={"a": go_a, "b": go_b, "c": go_c},
+                    cases={"a": self.go_a, "b": self.go_b, "c": self.go_c},
                 ),
             )
             .compile()

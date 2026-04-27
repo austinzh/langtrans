@@ -1,4 +1,3 @@
-import asyncio
 import operator
 from typing import Annotated, TypedDict
 
@@ -49,24 +48,31 @@ class TestAsyncSequential:
 
 
 class TestAsyncConcurrent:
+    @staticmethod
+    async def msg_a(state):
+        return {"messages": ["a"]}
+
+    @staticmethod
+    async def msg_b(state):
+        return {"messages": ["b"]}
+
+    @staticmethod
+    async def msg_c(state):
+        return {"messages": ["c"]}
+
+    @staticmethod
+    async def async_msg(state):
+        return {"messages": ["async"]}
+
+    @staticmethod
+    def sync_msg(state):
+        return {"messages": ["sync"]}
+
     @pytest.mark.asyncio
     async def test_async_concurrent(self):
-        async def msg_a(state):
-            return {"messages": ["a"]}
-
-        async def msg_b(state):
-            return {"messages": ["b"]}
-
-        async def msg_c(state):
-            return {"messages": ["c"]}
-
-        msg_a.__name__ = "msg_a"
-        msg_b.__name__ = "msg_b"
-        msg_c.__name__ = "msg_c"
-
         app = (
             Trans(state_schema=State)
-            .concurrent(msg_a, msg_b, msg_c)
+            .concurrent(self.msg_a, self.msg_b, self.msg_c)
             .compile()
         )
         result = await app.ainvoke({"messages": [], "metadata": {}})
@@ -74,18 +80,9 @@ class TestAsyncConcurrent:
 
     @pytest.mark.asyncio
     async def test_mixed_sync_async_concurrent(self):
-        async def async_msg(state):
-            return {"messages": ["async"]}
-
-        def sync_msg(state):
-            return {"messages": ["sync"]}
-
-        async_msg.__name__ = "async_msg"
-        sync_msg.__name__ = "sync_msg"
-
         app = (
             Trans(state_schema=State)
-            .concurrent(async_msg, sync_msg)
+            .concurrent(self.async_msg, self.sync_msg)
             .compile()
         )
         result = await app.ainvoke({"messages": [], "metadata": {}})
@@ -94,6 +91,10 @@ class TestAsyncConcurrent:
 
 
 class TestAsyncRollback:
+    @staticmethod
+    async def step_fail(state):
+        raise ValueError("boom")
+
     @pytest.mark.asyncio
     async def test_async_rollback_on_failure(self):
         rollback_log = []
@@ -108,14 +109,9 @@ class TestAsyncRollback:
             meta["_calls"] = ["a"]
             return {"metadata": meta}
 
-        async def step_fail(state):
-            raise ValueError("boom")
-
-        step_fail.__name__ = "step_fail"
-
         app = (
             Trans(state_schema=State)
-            .sequential(step_a, step_fail)
+            .sequential(step_a, self.step_fail)
             .compile()
         )
 
@@ -126,19 +122,18 @@ class TestAsyncRollback:
 
 
 class TestAsyncLoop:
+    @staticmethod
+    async def counter(state):
+        meta = dict(state.get("metadata", {}))
+        meta["count"] = meta.get("count", 0) + 1
+        return {"metadata": meta}
+
     @pytest.mark.asyncio
     async def test_async_loop_until(self):
-        async def counter(state):
-            meta = dict(state.get("metadata", {}))
-            meta["count"] = meta.get("count", 0) + 1
-            return {"metadata": meta}
-
-        counter.__name__ = "counter"
-
         app = (
             Trans(state_schema=State)
             .loop(
-                body=counter,
+                body=self.counter,
                 until=lambda s: s.get("metadata", {}).get("count", 0) >= 3,
             )
             .compile()

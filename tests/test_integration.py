@@ -42,21 +42,20 @@ class TestSequentialAgent:
 
 
 class TestParallelWithConditional:
+    @staticmethod
+    def msg_search_web(state):
+        return {"messages": ["search_web"]}
+
+    @staticmethod
+    def msg_search_db(state):
+        return {"messages": ["search_db"]}
+
     def test_concurrent_then_conditional(self):
-        def msg_search_web(state):
-            return {"messages": ["search_web"]}
-
-        def msg_search_db(state):
-            return {"messages": ["search_db"]}
-
-        msg_search_web.__name__ = "msg_search_web"
-        msg_search_db.__name__ = "msg_search_db"
-
         has_results = lambda s: len(s.get("messages", [])) >= 2
 
         app = (
             Trans(state_schema=State)
-            .concurrent(msg_search_web, msg_search_db)
+            .concurrent(self.msg_search_web, self.msg_search_db)
             .optional(has_results, then_=respond, else_=clarify)
             .compile()
         )
@@ -66,23 +65,21 @@ class TestParallelWithConditional:
 
 
 class TestLoopWithNesting:
+    @staticmethod
+    def increment(state):
+        meta = dict(state.get("metadata", {}))
+        count = meta.get("count", 0) + 1
+        meta["count"] = count
+        calls = list(meta.get("_calls", []))
+        calls.append(f"inc_{count}")
+        meta["_calls"] = calls
+        return {"metadata": meta}
+
+    @staticmethod
+    def is_even(state):
+        return state.get("metadata", {}).get("count", 0) % 2 == 0
+
     def test_loop_with_nested_optional(self):
-        counter = {"n": 0}
-
-        def increment(state):
-            counter["n"] += 1
-            meta = dict(state.get("metadata", {}))
-            meta["count"] = counter["n"]
-            calls = list(meta.get("_calls", []))
-            calls.append(f"inc_{counter['n']}")
-            meta["_calls"] = calls
-            return {"metadata": meta}
-
-        increment.__name__ = "increment"
-
-        def is_even(state):
-            return state.get("metadata", {}).get("count", 0) % 2 == 0
-
         mark_even = append_call("even")
         mark_odd = append_call("odd")
 
@@ -90,8 +87,8 @@ class TestLoopWithNesting:
             Trans(state_schema=State)
             .loop(
                 body=Proc().sequential(
-                    increment,
-                    Proc().optional(is_even, then_=mark_even, else_=mark_odd),
+                    self.increment,
+                    Proc().optional(self.is_even, then_=mark_even, else_=mark_odd),
                 ),
                 times=3,
             )
