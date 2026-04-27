@@ -93,31 +93,6 @@ class TestAsyncConcurrent:
         assert "sync" in result["messages"]
 
 
-class TestAsyncRetry:
-    @pytest.mark.asyncio
-    async def test_async_retry_succeeds(self):
-        call_count = {"n": 0}
-
-        async def flaky(state):
-            call_count["n"] += 1
-            if call_count["n"] < 3:
-                raise ValueError("not yet")
-            meta = dict(state.get("metadata", {}))
-            meta["_calls"] = ["flaky_ok"]
-            return {"metadata": meta}
-
-        flaky.__name__ = "flaky"
-
-        app = (
-            Trans(state_schema=State)
-            .retry(flaky, max_attempts=5, delay=0.0)
-            .compile()
-        )
-        result = await app.ainvoke({"messages": [], "metadata": {}})
-        assert result["metadata"]["_calls"] == ["flaky_ok"]
-        assert call_count["n"] == 3
-
-
 class TestAsyncRollback:
     @pytest.mark.asyncio
     async def test_async_rollback_on_failure(self):

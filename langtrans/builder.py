@@ -4,7 +4,7 @@ from typing import Callable, Optional, Union
 
 from langtrans.nodes import (
     ActionNode, ConcurrentNode, LoopNode, Node, OptionalNode,
-    ProcedureNode, RetryNode, SequentialNode, SwitchNode,
+    ProcedureNode, SequentialNode, SwitchNode,
 )
 from langtrans.spec import Spec
 
@@ -22,7 +22,7 @@ def _to_node(arg) -> Node:
     if isinstance(arg, Trans):
         return arg.build()
     if isinstance(arg, (ActionNode, SequentialNode, ConcurrentNode,
-                        OptionalNode, LoopNode, RetryNode, ProcedureNode)):
+                        OptionalNode, LoopNode, ProcedureNode, SwitchNode)):
         return arg
     if callable(arg):
         rollback = getattr(arg, "_langtrans_rollback", None)
@@ -59,11 +59,6 @@ class Trans:
     def loop(self, *, body: Union[Callable, Trans, Node], times: Optional[int] = None,
              until: Optional[Callable] = None) -> Trans:
         self._steps.append(LoopNode(body=_to_node(body), times=times, until=until))
-        return self
-
-    def retry(self, target: Union[Callable, Trans, Node], *, max_attempts: int = 3,
-              delay: float = 0.0) -> Trans:
-        self._steps.append(RetryNode(body=_to_node(target), max_attempts=max_attempts, delay=delay))
         return self
 
     def procedure(self, name: str, body: Union[Trans, Node]) -> Trans:

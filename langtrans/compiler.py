@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import asyncio
 import inspect
-import time
 from typing import Any, Callable
 
 from langgraph.graph import END, START, StateGraph
@@ -14,7 +12,6 @@ from langtrans.nodes import (
     Node,
     OptionalNode,
     ProcedureNode,
-    RetryNode,
     SequentialNode,
     SwitchNode,
 )
@@ -49,8 +46,6 @@ class _Compiler:
             return self._compile_optional(node)
         if isinstance(node, LoopNode):
             return self._compile_loop(node)
-        if isinstance(node, RetryNode):
-            return self._compile_retry(node)
         if isinstance(node, ProcedureNode):
             return self._compile_procedure(node)
         if isinstance(node, SwitchNode):
@@ -223,47 +218,7 @@ class _Compiler:
         return (entry_id, exit_id)
 
     # ------------------------------------------------------------------
-    # 6. RetryNode
-    # ------------------------------------------------------------------
-    def _compile_retry(self, node: RetryNode) -> tuple[str, str]:
-        if not isinstance(node.body, ActionNode):
-            raise TypeError("RetryNode body must be an ActionNode")
-
-        body_func = node.body.func
-        max_attempts = node.max_attempts
-        delay = node.delay
-        base_name = node.body.name or body_func.__name__
-
-        retry_id = self._unique_id(f"retry_{base_name}")
-
-        if inspect.iscoroutinefunction(body_func):
-            async def retry_runner(state, _func=body_func, _max=max_attempts, _delay=delay):
-                last_exc = None
-                for attempt in range(_max):
-                    try:
-                        return await _func(state)
-                    except Exception as exc:
-                        last_exc = exc
-                        if attempt < _max - 1 and _delay > 0:
-                            await asyncio.sleep(_delay)
-                raise last_exc
-        else:
-            def retry_runner(state, _func=body_func, _max=max_attempts, _delay=delay):
-                last_exc = None
-                for attempt in range(_max):
-                    try:
-                        return _func(state)
-                    except Exception as exc:
-                        last_exc = exc
-                        if attempt < _max - 1 and _delay > 0:
-                            time.sleep(_delay)
-                raise last_exc
-
-        self._graph.add_node(retry_id, retry_runner)
-        return (retry_id, retry_id)
-
-    # ------------------------------------------------------------------
-    # 7. ProcedureNode
+    # 6. ProcedureNode
     # ------------------------------------------------------------------
     def _compile_procedure(self, node: ProcedureNode) -> tuple[str, str]:
         old_prefix = self._prefix

@@ -273,64 +273,7 @@ class TestLoopNode:
 
 
 # =====================================================================
-# 6. RetryNode — retry with attempts
-# =====================================================================
-
-
-class TestRetryNode:
-    def test_always_succeeds_runs_once(self):
-        call_count = {"n": 0}
-
-        def succeed(state):
-            call_count["n"] += 1
-            meta = dict(state.get("metadata", {}))
-            meta["ok"] = True
-            return {"metadata": meta}
-
-        app = (
-            Trans(state_schema=State)
-            .retry(succeed, max_attempts=5)
-            .compile()
-        )
-        result = app.invoke(INIT_STATE)
-        assert result["metadata"]["ok"] is True
-        assert call_count["n"] == 1
-
-    def test_flaky_action_succeeds_on_third_try(self):
-        call_count = {"n": 0}
-
-        def flaky(state):
-            call_count["n"] += 1
-            if call_count["n"] < 3:
-                raise RuntimeError("fail")
-            meta = dict(state.get("metadata", {}))
-            meta["ok"] = True
-            return {"metadata": meta}
-
-        app = (
-            Trans(state_schema=State)
-            .retry(flaky, max_attempts=5)
-            .compile()
-        )
-        result = app.invoke(INIT_STATE)
-        assert result["metadata"]["ok"] is True
-        assert call_count["n"] == 3
-
-    def test_always_failing_raises(self):
-        def failing(state):
-            raise RuntimeError("always fails")
-
-        app = (
-            Trans(state_schema=State)
-            .retry(failing, max_attempts=2)
-            .compile()
-        )
-        with pytest.raises(RuntimeError, match="always fails"):
-            app.invoke(INIT_STATE)
-
-
-# =====================================================================
-# 7. ProcedureNode — name-prefixed subgraph
+# 6. ProcedureNode — name-prefixed subgraph
 # =====================================================================
 
 

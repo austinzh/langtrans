@@ -3,13 +3,12 @@
 from langtrans.builder import Trans, action
 from langtrans.nodes import (
     ActionNode, ConcurrentNode, LoopNode, Node, OptionalNode,
-    ProcedureNode, RetryNode, SequentialNode, SwitchNode,
+    ProcedureNode, SequentialNode, SwitchNode,
 )
 from langtrans.spec import Spec
 
 __all__ = [
     "Trans", "action", "Spec",
     "ActionNode", "ConcurrentNode", "LoopNode", "Node",
-    "OptionalNode", "ProcedureNode", "RetryNode", "SequentialNode",
-    "SwitchNode",
+    "OptionalNode", "ProcedureNode", "SequentialNode", "SwitchNode",
 ]

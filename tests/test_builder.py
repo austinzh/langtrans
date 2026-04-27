@@ -1,7 +1,7 @@
 from langtrans.builder import Trans, action
 from langtrans.nodes import (
     ActionNode, ConcurrentNode, LoopNode, OptionalNode,
-    ProcedureNode, RetryNode, SequentialNode,
+    ProcedureNode, SequentialNode,
 )
 from langtrans.spec import Spec
 
@@ -65,13 +65,6 @@ class TestTransBuilderSinglePrimitive:
         tree = Trans().loop(body=dummy, until=guard_true).build()
         assert isinstance(tree, LoopNode)
         assert tree.until is guard_true
-
-    def test_retry(self):
-        tree = Trans().retry(dummy, max_attempts=5, delay=2.0).build()
-        assert isinstance(tree, RetryNode)
-        assert tree.max_attempts == 5
-        assert tree.delay == 2.0
-        assert isinstance(tree.body, ActionNode)
 
     def test_procedure(self):
         sub = Trans().sequential(dummy, dummy)

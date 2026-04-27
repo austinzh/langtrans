@@ -1,4 +1,4 @@
-"""Example 3: ReAct-style agent loop with retry on tool failures."""
+"""Example 3: ReAct-style agent loop."""
 import operator
 from typing import Annotated, TypedDict
 
@@ -42,7 +42,7 @@ app = (
             call_agent,
             Trans().optional(
                 should_use_tool,
-                then_=Trans().retry(execute_tool, max_attempts=3),
+                then_=execute_tool,
             ),
         ),
     )

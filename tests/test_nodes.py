@@ -1,6 +1,6 @@
 from langtrans.nodes import (
     ActionNode, ConcurrentNode, LoopNode, Node, OptionalNode,
-    ProcedureNode, RetryNode, SequentialNode,
+    ProcedureNode, SequentialNode,
 )
 
 def dummy(state):
@@ -65,19 +65,6 @@ class TestLoopNode:
         node = LoopNode(body=body, until=dummy_guard)
         assert node.until is dummy_guard
         assert node.times is None
-
-class TestRetryNode:
-    def test_defaults(self):
-        body = ActionNode(func=dummy)
-        node = RetryNode(body=body)
-        assert node.max_attempts == 3
-        assert node.delay == 0.0
-
-    def test_custom(self):
-        body = ActionNode(func=dummy)
-        node = RetryNode(body=body, max_attempts=5, delay=1.5)
-        assert node.max_attempts == 5
-        assert node.delay == 1.5
 
 class TestProcedureNode:
     def test_named_sub_transaction(self):

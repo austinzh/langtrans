@@ -36,13 +36,6 @@ class LoopNode:
 
 
 @dataclass
-class RetryNode:
-    body: Node
-    max_attempts: int = 3
-    delay: float = 0.0
-
-
-@dataclass
 class ProcedureNode:
     name: str
     body: Node
@@ -56,5 +49,5 @@ class SwitchNode:
 
 Node = Union[
     ActionNode, SequentialNode, ConcurrentNode, OptionalNode,
-    LoopNode, RetryNode, ProcedureNode, SwitchNode,
+    LoopNode, ProcedureNode, SwitchNode,
 ]
