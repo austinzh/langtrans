@@ -102,24 +102,32 @@ class TestSequentialNode:
 # =====================================================================
 
 
+def msg_action(name):
+    def fn(state):
+        return {"messages": [name]}
+    fn.__name__ = name
+    fn.__qualname__ = name
+    return fn
+
+
 class TestConcurrentNode:
     def test_concurrent_three_actions(self):
         app = (
             Trans(state_schema=State)
-            .concurrent(action_a, action_b, action_c)
+            .concurrent(msg_action("a"), msg_action("b"), msg_action("c"))
             .compile()
         )
         result = app.invoke(INIT_STATE)
-        assert set(result["metadata"]["_calls"]) == {"a", "b", "c"}
+        assert set(result["messages"]) == {"a", "b", "c"}
 
     def test_concurrent_two_actions(self):
         app = (
             Trans(state_schema=State)
-            .concurrent(action_a, action_b)
+            .concurrent(msg_action("a"), msg_action("b"))
             .compile()
         )
         result = app.invoke(INIT_STATE)
-        assert set(result["metadata"]["_calls"]) == {"a", "b"}
+        assert set(result["messages"]) == {"a", "b"}
 
 
 # =====================================================================

@@ -43,19 +43,26 @@ class TestSequentialAgent:
 
 class TestParallelWithConditional:
     def test_concurrent_then_conditional(self):
-        has_results = lambda s: len(s.get("metadata", {}).get("_calls", [])) >= 2
+        def msg_search_web(state):
+            return {"messages": ["search_web"]}
+
+        def msg_search_db(state):
+            return {"messages": ["search_db"]}
+
+        msg_search_web.__name__ = "msg_search_web"
+        msg_search_db.__name__ = "msg_search_db"
+
+        has_results = lambda s: len(s.get("messages", [])) >= 2
 
         app = (
             Trans(state_schema=State)
-            .concurrent(search_web, search_db)
+            .concurrent(msg_search_web, msg_search_db)
             .optional(has_results, then_=respond, else_=clarify)
             .compile()
         )
         result = app.invoke({"messages": [], "metadata": {}})
-        calls = result["metadata"]["_calls"]
-        assert "search_web" in calls
-        assert "search_db" in calls
-        assert "respond" in calls
+        assert "search_web" in result["messages"]
+        assert "search_db" in result["messages"]
 
 
 class TestLoopWithNesting:

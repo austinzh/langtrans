@@ -88,58 +88,18 @@ class _Compiler:
     # 3. ConcurrentNode
     # ------------------------------------------------------------------
     def _compile_concurrent(self, node: ConcurrentNode) -> tuple[str, str]:
-        funcs = self._collect_action_funcs(node.children)
-        has_async = any(inspect.iscoroutinefunction(fn) for fn in funcs)
+        fork_id = self._unique_id("fork")
+        join_id = self._unique_id("join")
 
-        concurrent_id = self._unique_id("concurrent")
+        self._graph.add_node(fork_id, lambda s: {})
+        self._graph.add_node(join_id, lambda s: {})
 
-        if has_async:
-            async def concurrent_runner(state, _funcs=funcs):
-                current_state = dict(state)
-                for fn in _funcs:
-                    updates = await fn(current_state) if inspect.iscoroutinefunction(fn) else fn(current_state)
-                    if updates:
-                        for k, v in updates.items():
-                            current_state[k] = v
-                result = {}
-                for k, v in current_state.items():
-                    if k not in state or state[k] != v:
-                        result[k] = v
-                return result
-        else:
-            def concurrent_runner(state, _funcs=funcs):
-                current_state = dict(state)
-                for fn in _funcs:
-                    updates = fn(current_state)
-                    if updates:
-                        for k, v in updates.items():
-                            current_state[k] = v
-                result = {}
-                for k, v in current_state.items():
-                    if k not in state or state[k] != v:
-                        result[k] = v
-                return result
+        for child in node.children:
+            entry, exit_ = self.compile_node(child)
+            self._graph.add_edge(fork_id, entry)
+            self._graph.add_edge(exit_, join_id)
 
-        self._graph.add_node(concurrent_id, concurrent_runner)
-        return (concurrent_id, concurrent_id)
-
-    def _collect_action_funcs(self, children: list[Node]) -> list[Callable]:
-        """Recursively collect callable functions from a list of nodes."""
-        funcs = []
-        for child in children:
-            if isinstance(child, ActionNode):
-                funcs.append(child.func)
-            elif isinstance(child, SequentialNode):
-                for sub in child.children:
-                    funcs.extend(self._collect_action_funcs([sub]))
-            elif isinstance(child, ConcurrentNode):
-                funcs.extend(self._collect_action_funcs(child.children))
-            else:
-                raise TypeError(
-                    f"ConcurrentNode children must be ActionNode or "
-                    f"SequentialNode, got {type(child)}"
-                )
-        return funcs
+        return (fork_id, join_id)
 
     # ------------------------------------------------------------------
     # 4. OptionalNode

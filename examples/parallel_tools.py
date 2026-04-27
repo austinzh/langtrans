@@ -1,4 +1,9 @@
-"""Example 2: Parallel tool calls with conditional routing."""
+"""Example 2: Parallel tool calls with conditional routing.
+
+Parallel branches write to `messages` (which has operator.add reducer)
+so LangGraph can merge results from concurrent nodes. The conditional
+routing then checks the accumulated messages.
+"""
 import operator
 from typing import Annotated, TypedDict
 
@@ -10,37 +15,27 @@ class State(TypedDict):
     metadata: dict
 
 
-def search_web(state: State):
-    meta = dict(state.get("metadata", {}))
-    results = list(meta.get("results", []))
-    results.append("web result")
-    meta["results"] = results
-    return {"metadata": meta}
+def search_web(state):
+    return {"messages": [{"source": "web", "result": "web result"}]}
 
 
 def search_db(state):
-    meta = dict(state.get("metadata", {}))
-    results = list(meta.get("results", []))
-    results.append("db result")
-    meta["results"] = results
-    return {"metadata": meta}
+    return {"messages": [{"source": "db", "result": "db result"}]}
 
 
 def search_docs(state):
-    meta = dict(state.get("metadata", {}))
-    results = list(meta.get("results", []))
-    results.append("docs result")
-    meta["results"] = results
-    return {"metadata": meta}
+    return {"messages": [{"source": "docs", "result": "docs result"}]}
 
 
 def has_enough_info(state) -> bool:
-    return len(state.get("metadata", {}).get("results", [])) >= 2
+    results = [m for m in state.get("messages", []) if isinstance(m, dict) and "source" in m]
+    return len(results) >= 2
 
 
 def respond(state):
+    results = [m for m in state["messages"] if isinstance(m, dict) and "source" in m]
     meta = dict(state.get("metadata", {}))
-    meta["answer"] = f"Found {len(meta.get('results', []))} results"
+    meta["answer"] = f"Found {len(results)} results"
     return {"metadata": meta}
 
 

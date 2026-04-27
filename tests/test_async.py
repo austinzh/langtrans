@@ -51,35 +51,46 @@ class TestAsyncSequential:
 class TestAsyncConcurrent:
     @pytest.mark.asyncio
     async def test_async_concurrent(self):
+        async def msg_a(state):
+            return {"messages": ["a"]}
+
+        async def msg_b(state):
+            return {"messages": ["b"]}
+
+        async def msg_c(state):
+            return {"messages": ["c"]}
+
+        msg_a.__name__ = "msg_a"
+        msg_b.__name__ = "msg_b"
+        msg_c.__name__ = "msg_c"
+
         app = (
             Trans(state_schema=State)
-            .concurrent(async_action_a, async_action_b, async_action_c)
+            .concurrent(msg_a, msg_b, msg_c)
             .compile()
         )
         result = await app.ainvoke({"messages": [], "metadata": {}})
-        calls = result["metadata"]["_calls"]
-        assert set(calls) == {"a", "b", "c"}
+        assert set(result["messages"]) == {"a", "b", "c"}
 
     @pytest.mark.asyncio
     async def test_mixed_sync_async_concurrent(self):
-        def sync_action(state):
-            meta = dict(state.get("metadata", {}))
-            calls = list(meta.get("_calls", []))
-            calls.append("sync")
-            meta["_calls"] = calls
-            return {"metadata": meta}
+        async def async_msg(state):
+            return {"messages": ["async"]}
 
-        sync_action.__name__ = "sync_action"
+        def sync_msg(state):
+            return {"messages": ["sync"]}
+
+        async_msg.__name__ = "async_msg"
+        sync_msg.__name__ = "sync_msg"
 
         app = (
             Trans(state_schema=State)
-            .concurrent(async_action_a, sync_action)
+            .concurrent(async_msg, sync_msg)
             .compile()
         )
         result = await app.ainvoke({"messages": [], "metadata": {}})
-        calls = result["metadata"]["_calls"]
-        assert "a" in calls
-        assert "sync" in calls
+        assert "async" in result["messages"]
+        assert "sync" in result["messages"]
 
 
 class TestAsyncRetry:
