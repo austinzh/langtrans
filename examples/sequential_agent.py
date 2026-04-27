@@ -1,4 +1,5 @@
 """Example 1: Sequential Agent — fetch data, call LLM, respond."""
+
 import operator
 from typing import Annotated, TypedDict
 
@@ -31,11 +32,8 @@ def format_response(state):
 
 app = (
     Trans(state_schema=State)
-    .sequential(
-        fetch_data, 
-        call_llm, 
-        format_response
-    ).compile()
+    .sequential(fetch_data, call_llm, format_response)
+    .compile()
 )
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any, TypeAlias
 
 from langgraph.graph import END, START, StateGraph
 
@@ -15,9 +16,11 @@ from langtrans.nodes import (
     SwitchNode,
 )
 
+_Step: TypeAlias = tuple[Callable[..., Any], Callable[..., Any] | None]
+
 
 class _Compiler:
-    def __init__(self, graph: StateGraph) -> None:
+    def __init__(self, graph: StateGraph[Any]) -> None:
         self._graph = graph
         self._counter = 0
         self._prefix = ""
@@ -63,6 +66,7 @@ class _Compiler:
     # ActionNode
     # ------------------------------------------------------------------
     def _compile_action(self, node: ActionNode) -> tuple[str, str]:
+        assert node.func is not None, "ActionNode.func must be set"
         base = node.name or node.func.__name__
         node_id = self._unique_id(base)
         self._graph.add_node(node_id, node.func)
@@ -112,7 +116,7 @@ class _Compiler:
         self._graph.add_node(decision_id, lambda s: {})
         self._graph.add_node(merge_id, lambda s: {})
 
-        then_entry, then_exit = self.compile_node(node.then_)
+        then_entry, then_exit = self.compile_node(node.then_)  # type: ignore[arg-type]
         self._graph.add_edge(then_exit, merge_id)
 
         guard = node.guard
@@ -121,21 +125,31 @@ class _Compiler:
             else_entry, else_exit = self.compile_node(node.else_)
             self._graph.add_edge(else_exit, merge_id)
 
-            def router(state, _guard=guard, _then=then_entry, _else=else_entry):
+            def router_with_else(
+                state: Any,
+                _guard: Any = guard,
+                _then: str = then_entry,
+                _else: str = else_entry,
+            ) -> str:
                 result = _guard(state) if callable(_guard) else bool(_guard)
                 return _then if result else _else
 
             self._graph.add_conditional_edges(
-                decision_id, router, [then_entry, else_entry]
+                decision_id, router_with_else, [then_entry, else_entry]
             )
         else:
 
-            def router(state, _guard=guard, _then=then_entry, _merge=merge_id):
+            def router_no_else(
+                state: Any,
+                _guard: Any = guard,
+                _then: str = then_entry,
+                _merge: str = merge_id,
+            ) -> str:
                 result = _guard(state) if callable(_guard) else bool(_guard)
                 return _then if result else _merge
 
             self._graph.add_conditional_edges(
-                decision_id, router, [then_entry, merge_id]
+                decision_id, router_no_else, [then_entry, merge_id]
             )
 
         return (decision_id, merge_id)
@@ -160,14 +174,14 @@ class _Compiler:
         gate_id = self._unique_id("loop_gate")
         exit_id = self._unique_id("loop_exit")
 
-        def init_fn(state, _key=counter_key):
+        def init_fn(state: Any, _key: str = counter_key) -> dict[str, Any]:
             meta = dict(state.get("metadata", {}))
             lt = dict(meta.get("_langtrans", {}))
             lt[_key] = 0
             meta["_langtrans"] = lt
             return {"metadata": meta}
 
-        def gate_fn(state, _key=counter_key):
+        def gate_fn(state: Any, _key: str = counter_key) -> dict[str, Any]:
             meta = dict(state.get("metadata", {}))
             lt = dict(meta.get("_langtrans", {}))
             lt[_key] = lt.get(_key, 0) + 1
@@ -178,16 +192,20 @@ class _Compiler:
         self._graph.add_node(gate_id, gate_fn)
         self._graph.add_node(exit_id, lambda s: {})
 
-        body_entry, body_exit = self.compile_node(node.body)
+        body_entry, body_exit = self.compile_node(node.body)  # type: ignore[arg-type]
 
         self._graph.add_edge(init_id, body_entry)
         self._graph.add_edge(body_exit, gate_id)
 
         def gate_router(
-            state, _key=counter_key, _times=times, _body=body_entry, _exit=exit_id
-        ):
+            state: Any,
+            _key: str = counter_key,
+            _times: int | None = times,
+            _body: str = body_entry,
+            _exit: str = exit_id,
+        ) -> str:
             count = state.get("metadata", {}).get("_langtrans", {}).get(_key, 0)
-            return _body if count < _times else _exit
+            return _body if count < (_times or 0) else _exit
 
         self._graph.add_conditional_edges(gate_id, gate_router, [body_entry, exit_id])
 
@@ -201,11 +219,16 @@ class _Compiler:
         self._graph.add_node(entry_id, lambda s: {})
         self._graph.add_node(exit_id, lambda s: {})
 
-        body_entry, body_exit = self.compile_node(node.body)
+        body_entry, body_exit = self.compile_node(node.body)  # type: ignore[arg-type]
 
         self._graph.add_edge(entry_id, body_entry)
 
-        def body_router(state, _until=until_fn, _body=body_entry, _exit=exit_id):
+        def body_router(
+            state: Any,
+            _until: Any = until_fn,
+            _body: str = body_entry,
+            _exit: str = exit_id,
+        ) -> str:
             return _exit if _until(state) else _body
 
         self._graph.add_conditional_edges(body_exit, body_router, [body_entry, exit_id])
@@ -222,7 +245,7 @@ class _Compiler:
         self._graph.add_node(dispatch_id, lambda s: {})
         self._graph.add_node(merge_id, lambda s: {})
 
-        case_entries = {}
+        case_entries: dict[str, str] = {}
         for case_key, case_node in node.cases.items():
             entry, exit_ = self.compile_node(case_node)
             self._graph.add_edge(exit_, merge_id)
@@ -230,7 +253,11 @@ class _Compiler:
 
         key_fn = node.key
 
-        def router(state, _key_fn=key_fn, _cases=case_entries):
+        def router(
+            state: Any,
+            _key_fn: Any = key_fn,
+            _cases: dict[str, str] = case_entries,
+        ) -> str:
             return _cases[_key_fn(state)]
 
         self._graph.add_conditional_edges(
@@ -253,10 +280,10 @@ class _Compiler:
     ) -> tuple[str, str]:
         rollback_id = self._unique_id("seq_rollback")
 
-        steps: list[tuple[Callable, Callable | None]] = []
+        steps: list[_Step] = []
         for child in node.children:
             if isinstance(child, ActionNode):
-                steps.append((child.func, child.rollback))
+                steps.append((child.func, child.rollback))  # type: ignore[arg-type]
             else:
                 raise TypeError(
                     "Rollback sequential only supports ActionNode children, "
@@ -271,9 +298,12 @@ class _Compiler:
 
         if has_async:
 
-            async def rollback_runner(state, _steps=steps):
+            async def async_rollback_runner(
+                state: Any,
+                _steps: list[_Step] = steps,
+            ) -> dict[str, Any]:
                 current_state = dict(state)
-                completed_rollbacks: list[Callable] = []
+                completed_rollbacks: list[Callable[..., Any]] = []
 
                 for func, rollback in _steps:
                     try:
@@ -302,17 +332,21 @@ class _Compiler:
                                 pass
                         raise
 
-                result = {}
+                result: dict[str, Any] = {}
                 for k, v in current_state.items():
                     if k not in state or state[k] != v:
                         result[k] = v
                 return result
 
+            self._graph.add_node(rollback_id, async_rollback_runner)
         else:
 
-            def rollback_runner(state, _steps=steps):
+            def sync_rollback_runner(
+                state: Any,
+                _steps: list[_Step] = steps,
+            ) -> dict[str, Any]:
                 current_state = dict(state)
-                completed_rollbacks: list[Callable] = []
+                completed_rollbacks: list[Callable[..., Any]] = []
 
                 for func, rollback in _steps:
                     try:
@@ -333,18 +367,18 @@ class _Compiler:
                                 pass
                         raise
 
-                result = {}
+                result: dict[str, Any] = {}
                 for k, v in current_state.items():
                     if k not in state or state[k] != v:
                         result[k] = v
                 return result
 
-        self._graph.add_node(rollback_id, rollback_runner)
+            self._graph.add_node(rollback_id, sync_rollback_runner)
         return (rollback_id, rollback_id)
 
 
-def compile_graph(tree: Node, *, state_schema, **kwargs) -> Any:
-    graph = StateGraph(state_schema)
+def compile_graph(tree: Node, *, state_schema: type[Any], **kwargs: Any) -> Any:
+    graph: StateGraph[Any] = StateGraph(state_schema)
     compiler = _Compiler(graph)
     entry, exit_ = compiler.compile_node(tree)
     graph.add_edge(START, entry)

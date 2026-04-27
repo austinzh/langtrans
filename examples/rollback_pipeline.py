@@ -1,4 +1,5 @@
 """Example 4: Multi-step pipeline with Saga-pattern rollback."""
+
 import operator
 from typing import Annotated, TypedDict
 

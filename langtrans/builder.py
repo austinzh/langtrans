@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Protocol, Self, TypeAlias, runtime_checkable
+from collections.abc import Callable
+from typing import Any, Protocol, Self, TypeAlias, runtime_checkable
 
 from langtrans.nodes import (
     ActionNode,
@@ -13,15 +14,14 @@ from langtrans.nodes import (
 )
 from langtrans.spec import Spec
 
-__all__ = ["Trans", "Proc", "action", "StepArg", "GuardArg", "RunnableLike"]
+__all__ = ["GuardArg", "Proc", "RunnableLike", "StepArg", "Trans", "action"]
 
 
 @runtime_checkable
 class RunnableLike(Protocol):
-    """A graph step with ``invoke`` (e.g. LangGraph ``Runnable``) that is not used as a plain ``callable``."""
+    """A graph step with ``invoke`` (e.g. LangGraph ``Runnable``)."""
 
-    def invoke(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def invoke(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 class _BuilderBase:
@@ -77,14 +77,17 @@ class _BuilderBase:
         self._steps.append(SwitchNode(key=key, cases=compiled_cases, name=name))
         return self
 
+    def build(self) -> Node:
+        return self._build_steps()
+
     def _build_steps(self) -> Node:
         if len(self._steps) == 1:
             return self._steps[0]
         return SequentialNode(children=list(self._steps))
 
 
-# Values accepted at builder composition time (``_to_node``) — plain functions, sub-builders,
-# compiled ``Node`` trees, or LangGraph-style runnables (``invoke`` when not a ``callable``).
+# Values accepted at builder composition time (``_to_node``).
+# Plain functions, sub-builders, ``Node`` trees, or LangGraph runnables.
 StepArg: TypeAlias = Node | _BuilderBase | Callable[..., Any] | RunnableLike
 
 # ``optional`` guard: a ``Spec`` combinator or any callable the compiler accepts.
@@ -97,7 +100,7 @@ def action(
     rollback: Callable[..., Any] | None = None,
 ) -> Any:
     def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
-        f._langtrans_rollback = rollback
+        f._langtrans_rollback = rollback  # type: ignore[attr-defined]
         return f
 
     if fn is not None:
@@ -116,7 +119,7 @@ def _to_node(arg: StepArg) -> Node:
         return ActionNode(func=arg, rollback=rollback, name=name)
     if hasattr(arg, "invoke"):
         name = getattr(arg, "name", None) or type(arg).__name__
-        return ActionNode(func=arg, name=name)
+        return ActionNode(func=arg.invoke, name=name)
     raise TypeError(f"Cannot convert {type(arg)} to a Node")
 
 

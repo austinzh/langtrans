@@ -6,10 +6,10 @@ Inspired by [trans-dsl](https://github.com/agiledragon/trans-dsl), langtrans let
 
 ## Why?
 
-LangGraph gives you powerful runtime capabilities (checkpointing, streaming, time-travel debugging). But building graphs is verbose:
+LangGraph gives you powerful runtime capabilities (checkpointing, streaming, time-travel debugging). But graph construction is low-level — you wire nodes and edges imperatively, and the control flow is hidden in `add_edge` / `add_conditional_edges` calls:
 
 ```python
-# Raw LangGraph — 12 lines of wiring
+# Raw LangGraph — what's the workflow here?
 graph = StateGraph(AgentState)
 graph.add_node("agent", call_llm)
 graph.add_node("tools", tool_node)
@@ -24,24 +24,30 @@ app = graph.compile()
 ```
 
 ```python
-# langtrans — same graph, 7 lines
+# langtrans — the structure IS the workflow
 app = (
     Trans(state_schema=AgentState)
     .sequential(call_llm)
     .loop(
         until=lambda s: not has_tool_calls(s),
-        body=Trans().sequential(tool_node, call_llm),
+        body=Proc().sequential(tool_node, call_llm),
     )
     .compile()
 )
 ```
 
-Same runtime superpowers. Less boilerplate.
+Both produce the same `CompiledStateGraph` with the same runtime superpowers. The difference is readability: langtrans makes the workflow structure — sequential, concurrent, conditional, loop — visible in the code itself, instead of buried in edge-wiring.
 
 ## Install
 
 ```bash
-pip install -e ".[dev]"
+pip install langtrans
+```
+
+Or for development:
+
+```bash
+uv sync
 ```
 
 Requires Python 3.11+ and `langgraph`.
@@ -139,27 +145,6 @@ Trans(state_schema=State).loop(
 ).compile()
 ```
 
-### Retry
-
-Retry on failure with configurable attempts and delay:
-
-```python
-Trans(state_schema=State).retry(flaky_api_call, max_attempts=3, delay=1.0).compile()
-```
-
-### Procedure
-
-Named sub-transactions for reuse and organization:
-
-```python
-fetch_pipeline = Trans().sequential(fetch, validate, transform)
-
-Trans(state_schema=State)
-    .procedure("ingest", fetch_pipeline)
-    .sequential(respond)
-    .compile()
-```
-
 ### Switch
 
 Multi-way branching — the key to arbitrary state machines:
@@ -167,10 +152,10 @@ Multi-way branching — the key to arbitrary state machines:
 ```python
 Trans(state_schema=State).loop(
     until=lambda s: s["metadata"].get("done"),
-    body=Trans().switch(
+    body=Proc().switch(
         key=classify_situation,
         cases={
-            "need_tools":   execute_tools,
+            "need_tools":    execute_tools,
             "need_research": do_research,
             "need_approval": wait_for_human,
             "ready":         generate_response,
@@ -179,23 +164,37 @@ Trans(state_schema=State).loop(
 ).compile()
 ```
 
+### Proc (Sub-builders)
+
+`Proc()` creates reusable sub-builders for nesting. Use `Proc("name")` to give a group a label:
+
+```python
+from langtrans import Trans, Proc
+
+ingest = Proc("ingest").sequential(fetch, validate, transform)
+
+Trans(state_schema=State)
+    .sequential(ingest, respond)
+    .compile()
+```
+
 ### Nesting
 
-All primitives compose via nested `Trans()` builders:
+All primitives compose via nested `Proc()` builders:
 
 ```python
 app = (
     Trans(state_schema=State)
     .sequential(
         fetch_data,
-        Trans().concurrent(
-            Trans().sequential(call_llm, parse_result),
+        Proc().concurrent(
+            Proc().sequential(call_llm, parse_result),
             search_web,
         ),
-        Trans().optional(
+        Proc().optional(
             is_confident,
             then_=respond,
-            else_=Trans().retry(escalate, max_attempts=3),
+            else_=escalate,
         ),
     )
     .compile()
@@ -278,7 +277,7 @@ Use **langtrans** (compiling to LangGraph) when you need:
 - Token streaming from LLM nodes
 - Workflow visualization
 
-langtrans doesn't add computation power over Python. It makes LangGraph's runtime superpowers easy to access.
+langtrans doesn't add computation power over Python. It makes LangGraph workflows readable — you see the control flow in the code instead of reconstructing it from edge tables.
 
 ## License
 

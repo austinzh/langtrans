@@ -1,8 +1,9 @@
 """Example 3: ReAct-style agent loop."""
+
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans.builder import Trans, Proc
+from langtrans.builder import Proc, Trans
 
 
 class State(TypedDict):

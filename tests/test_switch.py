@@ -1,8 +1,7 @@
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans import Trans, Proc, SwitchNode
-from langtrans.builder import _to_node
+from langtrans import Proc, SwitchNode, Trans
 from langtrans.nodes import ActionNode
 
 
@@ -19,6 +18,7 @@ def set_state(name):
         meta["_calls"] = calls
         meta["_state"] = name
         return {"metadata": meta}
+
     fn.__name__ = name
     fn.__qualname__ = name
     return fn

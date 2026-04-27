@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class Spec:
-    def __init__(self, fn: Callable) -> None:
+    def __init__(self, fn: Callable[..., Any]) -> None:
         self._fn = fn
 
-    def __call__(self, state) -> bool:
+    def __call__(self, state: Any) -> bool:
         return bool(self._fn(state))
 
     def __and__(self, other: Spec) -> Spec:

@@ -1,9 +1,11 @@
 from langtrans.spec import Spec
 
+
 def test_spec_from_function():
     s = Spec(lambda state: state["metadata"].get("x") == 1)
     assert s({"metadata": {"x": 1}}) is True
     assert s({"metadata": {"x": 2}}) is False
+
 
 def test_spec_and():
     a = Spec(lambda s: s["metadata"].get("x", 0) > 0)
@@ -13,6 +15,7 @@ def test_spec_and():
     assert combined({"metadata": {"x": 1, "y": 0}}) is False
     assert combined({"metadata": {"x": 0, "y": 1}}) is False
 
+
 def test_spec_or():
     a = Spec(lambda s: s["metadata"].get("x", 0) > 0)
     b = Spec(lambda s: s["metadata"].get("y", 0) > 0)
@@ -21,11 +24,13 @@ def test_spec_or():
     assert combined({"metadata": {"x": 0, "y": 1}}) is True
     assert combined({"metadata": {"x": 0, "y": 0}}) is False
 
+
 def test_spec_not():
     a = Spec(lambda s: s["metadata"].get("x", 0) > 0)
     inverted = ~a
     assert inverted({"metadata": {"x": 0}}) is True
     assert inverted({"metadata": {"x": 1}}) is False
+
 
 def test_spec_complex_composition():
     x_pos = Spec(lambda s: s["metadata"].get("x", 0) > 0)

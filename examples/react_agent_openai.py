@@ -13,7 +13,8 @@ Usage:
 
 import operator
 import sys
-from typing import Annotated, Sequence, TypedDict
+from collections.abc import Sequence
+from typing import Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.tools import tool
@@ -21,10 +22,10 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from langtrans import Trans, Proc
-
+from langtrans import Proc, Trans
 
 # ── Shared setup ─────────────────────────────────────────────────────
+
 
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], operator.add]
@@ -64,6 +65,7 @@ def has_tool_calls(state: AgentState) -> bool:
 # Raw LangGraph — 12 lines of graph wiring
 # =====================================================================
 
+
 def build_raw_langgraph():
     graph = StateGraph(AgentState)
 
@@ -84,6 +86,7 @@ def build_raw_langgraph():
 # =====================================================================
 # langtrans — 7 lines
 # =====================================================================
+
 
 def build_langtrans():
     return (

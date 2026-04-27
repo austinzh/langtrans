@@ -1,7 +1,7 @@
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans.builder import Trans, Proc, action
+from langtrans.builder import Proc, Trans
 from langtrans.spec import Spec
 
 
@@ -17,6 +17,7 @@ def append_call(name):
         calls.append(name)
         meta["_calls"] = calls
         return {"metadata": meta}
+
     fn.__name__ = name
     fn.__qualname__ = name
     return fn
@@ -32,11 +33,7 @@ clarify = append_call("clarify")
 
 class TestSequentialAgent:
     def test_three_step_pipeline(self):
-        app = (
-            Trans(state_schema=State)
-            .sequential(fetch, llm, respond)
-            .compile()
-        )
+        app = Trans(state_schema=State).sequential(fetch, llm, respond).compile()
         result = app.invoke({"messages": [], "metadata": {}})
         assert result["metadata"]["_calls"] == ["fetch", "llm", "respond"]
 
@@ -51,7 +48,8 @@ class TestParallelWithConditional:
         return {"messages": ["search_db"]}
 
     def test_concurrent_then_conditional(self):
-        has_results = lambda s: len(s.get("messages", [])) >= 2
+        def has_results(s):
+            return len(s.get("messages", [])) >= 2
 
         app = (
             Trans(state_schema=State)

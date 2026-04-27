@@ -1,16 +1,24 @@
 from langtrans.nodes import (
-    ActionNode, ConcurrentNode, LoopNode, Node, OptionalNode,
+    ActionNode,
+    ConcurrentNode,
+    LoopNode,
+    Node,
+    OptionalNode,
     SequentialNode,
 )
+
 
 def dummy(state):
     return state
 
+
 def dummy_rollback(state):
     return state
 
+
 def dummy_guard(state) -> bool:
     return True
+
 
 class TestActionNode:
     def test_minimal(self):
@@ -24,6 +32,7 @@ class TestActionNode:
         assert node.rollback is dummy_rollback
         assert node.name == "my_action"
 
+
 class TestSequentialNode:
     def test_children(self):
         a = ActionNode(func=dummy)
@@ -32,12 +41,14 @@ class TestSequentialNode:
         assert len(node.children) == 2
         assert node.children[0] is a
 
+
 class TestConcurrentNode:
     def test_children(self):
         a = ActionNode(func=dummy)
         b = ActionNode(func=dummy)
         node = ConcurrentNode(children=[a, b])
         assert len(node.children) == 2
+
 
 class TestOptionalNode:
     def test_with_both_branches(self):
@@ -53,6 +64,7 @@ class TestOptionalNode:
         node = OptionalNode(guard=dummy_guard, then_=a)
         assert node.else_ is None
 
+
 class TestLoopNode:
     def test_fixed_count(self):
         body = ActionNode(func=dummy)
@@ -66,6 +78,7 @@ class TestLoopNode:
         assert node.until is dummy_guard
         assert node.times is None
 
+
 class TestNamedNodes:
     def test_sequential_with_name(self):
         node = SequentialNode(children=[ActionNode(func=dummy)], name="sub_flow")
@@ -74,6 +87,7 @@ class TestNamedNodes:
     def test_sequential_without_name(self):
         node = SequentialNode(children=[ActionNode(func=dummy)])
         assert node.name is None
+
 
 class TestNodeUnionType:
     def test_action_is_node(self):

@@ -4,6 +4,7 @@ Parallel branches write to `messages` (which has operator.add reducer)
 so LangGraph can merge results from concurrent nodes. The conditional
 routing then checks the accumulated messages.
 """
+
 import operator
 from typing import Annotated, TypedDict
 
@@ -28,7 +29,9 @@ def search_docs(state):
 
 
 def has_enough_info(state) -> bool:
-    results = [m for m in state.get("messages", []) if isinstance(m, dict) and "source" in m]
+    results = [
+        m for m in state.get("messages", []) if isinstance(m, dict) and "source" in m
+    ]
     return len(results) >= 2
 
 

@@ -109,11 +109,7 @@ class TestAsyncRollback:
             meta["_calls"] = ["a"]
             return {"metadata": meta}
 
-        app = (
-            Trans(state_schema=State)
-            .sequential(step_a, self.step_fail)
-            .compile()
-        )
+        app = Trans(state_schema=State).sequential(step_a, self.step_fail).compile()
 
         with pytest.raises(ValueError, match="boom"):
             await app.ainvoke({"messages": [], "metadata": {}})

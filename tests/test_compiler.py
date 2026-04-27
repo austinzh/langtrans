@@ -5,9 +5,8 @@ from typing import Annotated, TypedDict
 
 import pytest
 
-from langtrans.builder import Trans, Proc, action
+from langtrans.builder import Proc, Trans
 from langtrans.spec import Spec
-
 
 # ── State schema ──────────────────────────────────────────────────────
 
@@ -75,19 +74,13 @@ class TestActionNode:
 class TestSequentialNode:
     def test_sequential_three_actions(self):
         app = (
-            Trans(state_schema=State)
-            .sequential(action_a, action_b, action_c)
-            .compile()
+            Trans(state_schema=State).sequential(action_a, action_b, action_c).compile()
         )
         result = app.invoke(INIT_STATE)
         assert result["metadata"]["_calls"] == ["a", "b", "c"]
 
     def test_sequential_two_actions(self):
-        app = (
-            Trans(state_schema=State)
-            .sequential(action_a, action_b)
-            .compile()
-        )
+        app = Trans(state_schema=State).sequential(action_a, action_b).compile()
         result = app.invoke(INIT_STATE)
         assert result["metadata"]["_calls"] == ["a", "b"]
 
@@ -105,6 +98,7 @@ class TestSequentialNode:
 def msg_action(name):
     def fn(state):
         return {"messages": [name]}
+
     fn.__name__ = name
     fn.__qualname__ = name
     return fn
@@ -163,14 +157,13 @@ class TestOptionalNode:
         assert result["metadata"]["_calls"] == ["b"]
 
     def test_guard_false_no_else_skips(self):
-        app = (
-            Trans(state_schema=State)
-            .optional(always_false, then_=action_a)
-            .compile()
-        )
+        app = Trans(state_schema=State).optional(always_false, then_=action_a).compile()
         result = app.invoke(INIT_STATE)
         # No branch taken, _calls should not exist or be empty
-        assert result["metadata"].get("_calls") is None or result["metadata"]["_calls"] == []
+        assert (
+            result["metadata"].get("_calls") is None
+            or result["metadata"]["_calls"] == []
+        )
 
     def test_spec_guard(self):
         spec = Spec(lambda s: True)
@@ -230,20 +223,12 @@ def counting_action(state):
 
 class TestLoopNode:
     def test_loop_fixed_times(self):
-        app = (
-            Trans(state_schema=State)
-            .loop(body=counting_action, times=3)
-            .compile()
-        )
+        app = Trans(state_schema=State).loop(body=counting_action, times=3).compile()
         result = app.invoke(INIT_STATE)
         assert result["metadata"]["_count"] == 3
 
     def test_loop_fixed_times_one(self):
-        app = (
-            Trans(state_schema=State)
-            .loop(body=counting_action, times=1)
-            .compile()
-        )
+        app = Trans(state_schema=State).loop(body=counting_action, times=1).compile()
         result = app.invoke(INIT_STATE)
         assert result["metadata"]["_count"] == 1
 
@@ -320,7 +305,7 @@ class TestNamedNodes:
 
 class TestRollback:
     def test_rollback_on_failure(self):
-        """step_a(rollback) -> step_b(rollback) -> step_c_fail -> rollback_b, rollback_a"""
+        """step_a/b with rollback, step_c fails, rollback_b then rollback_a."""
         rollback_order = []
 
         def step_a(state):
@@ -354,11 +339,7 @@ class TestRollback:
         node_b = ActionNode(func=step_b, rollback=rollback_b, name="step_b")
         node_c = ActionNode(func=step_c_fail, name="step_c_fail")
 
-        app = (
-            Trans(state_schema=State)
-            .sequential(node_a, node_b, node_c)
-            .compile()
-        )
+        app = Trans(state_schema=State).sequential(node_a, node_b, node_c).compile()
 
         with pytest.raises(RuntimeError, match="step_c failed"):
             app.invoke(INIT_STATE)
@@ -377,11 +358,7 @@ class TestRollback:
         node_a = ActionNode(func=action_a, rollback=rollback_fn, name="ra")
         node_b = ActionNode(func=action_b, rollback=rollback_fn, name="rb")
 
-        app = (
-            Trans(state_schema=State)
-            .sequential(node_a, node_b)
-            .compile()
-        )
+        app = Trans(state_schema=State).sequential(node_a, node_b).compile()
 
         result = app.invoke(INIT_STATE)
         assert result["metadata"]["_calls"] == ["a", "b"]

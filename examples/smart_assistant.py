@@ -13,7 +13,7 @@ Usage:
 import operator
 from typing import Annotated, TypedDict
 
-from langtrans import Trans, Proc
+from langtrans import Proc, Trans
 
 
 class State(TypedDict):
@@ -22,6 +22,7 @@ class State(TypedDict):
 
 
 # ── Domain classifier — reads actual data to decide next step ────────
+
 
 def classify(state) -> str:
     meta = state.get("metadata", {})
@@ -50,17 +51,25 @@ def is_done(state) -> bool:
 
 # ── Actions — each modifies domain data, which drives next routing ───
 
+
 def understand_query(state):
     """Parse the user query and figure out what's needed."""
     meta = dict(state.get("metadata", {}))
     query = meta.get("query", "")
 
     meta["query_understood"] = True
-    meta["needs_calculation"] = any(op in query for op in ["+", "-", "*", "/", "calculate"])
-    meta["needs_lookup"] = any(kw in query.lower() for kw in ["who", "what", "when", "where", "search"])
+    meta["needs_calculation"] = any(
+        op in query for op in ["+", "-", "*", "/", "calculate"]
+    )
+    meta["needs_lookup"] = any(
+        kw in query.lower() for kw in ["who", "what", "when", "where", "search"]
+    )
 
     log = list(meta.get("log", []))
-    log.append(f"Understood query: calc={meta['needs_calculation']}, lookup={meta['needs_lookup']}")
+    log.append(
+        f"Understood query: calc={meta['needs_calculation']},"
+        f" lookup={meta['needs_lookup']}"
+    )
     meta["log"] = log
     return {"metadata": meta}
 
@@ -142,11 +151,11 @@ app = (
             key=classify,
             cases={
                 "understand": understand_query,
-                "calculate":  do_calculation,
-                "lookup":     do_lookup,
-                "draft":      draft_response,
-                "verify":     verify_response,
-                "deliver":    deliver_response,
+                "calculate": do_calculation,
+                "lookup": do_lookup,
+                "draft": draft_response,
+                "verify": verify_response,
+                "deliver": deliver_response,
             },
         ),
     )
@@ -166,13 +175,13 @@ if __name__ == "__main__":
 
     for title, query in scenarios:
         print(f"\n{'=' * 60}")
-        print(f"  {title}: \"{query}\"")
+        print(f'  {title}: "{query}"')
         print(f"{'=' * 60}")
 
         result = app.invoke({"messages": [], "metadata": {"query": query}})
         meta = result["metadata"]
 
-        print(f"\n  Route taken:")
+        print("\n  Route taken:")
         for step in meta["log"]:
             print(f"    → {step}")
 
