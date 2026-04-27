@@ -28,6 +28,9 @@ def _to_node(arg) -> Node:
         rollback = getattr(arg, "_langtrans_rollback", None)
         name = getattr(arg, "__name__", None)
         return ActionNode(func=arg, rollback=rollback, name=name)
+    if hasattr(arg, "invoke"):
+        name = getattr(arg, "name", None) or type(arg).__name__
+        return ActionNode(func=arg, name=name)
     raise TypeError(f"Cannot convert {type(arg)} to a Node")
 
 
